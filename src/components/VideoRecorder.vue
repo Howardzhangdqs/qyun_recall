@@ -409,6 +409,7 @@ h1 {
   gap: 10px;
   margin-top: 20px;
   padding-bottom: 20px;
+  flex-wrap: wrap;
 }
 
 .control-btn {
