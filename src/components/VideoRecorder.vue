@@ -58,7 +58,12 @@ const cycleSpeed = () => {
 // 初始化视频
 onMounted(async () => {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+    // 调用后置摄像头
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { exact: "environment" }  // environment表示后置摄像头，user表示前置摄像头
+      }
+    })
     videoStream.value = stream
 
     if (liveVideo.value) {
