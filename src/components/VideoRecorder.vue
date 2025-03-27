@@ -24,7 +24,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue';
+
+const FRAME_RATE = 60;
 
 // 组件状态
 const recording = ref(true)
@@ -33,7 +35,7 @@ const paused = ref(false)
 const playbackSpeed = ref(0.25)
 const statusText = ref('Record')
 const frameBuffer = ref<ImageData[]>([])
-const bufferSize = ref(5 * 30)
+const bufferSize = ref(5 * FRAME_RATE)
 const currentPlaybackIndex = ref(0)
 const playbackFrames = ref<ImageData[]>([])
 const animationFrameId = ref<number | null>(null)
@@ -61,7 +63,11 @@ onMounted(async () => {
     // 调用后置摄像头
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: { exact: "environment" }  // environment表示后置摄像头，user表示前置摄像头
+        facingMode: { exact: "environment" },  // environment表示后置摄像头，user表示前置摄像头
+        frameRate: {
+          ideal: FRAME_RATE,
+          max: FRAME_RATE,
+        }
       }
     })
     videoStream.value = stream
@@ -185,7 +191,7 @@ const playNextFrame = () => {
   currentPlaybackIndex.value++
 
   // 计算基于播放速度的延迟
-  const delay = Math.max(16, 1000 / (30 * playbackSpeed.value)) // 假设30fps
+  const delay = Math.max(16, 1000 / (FRAME_RATE * playbackSpeed.value)) // 假设30fps
 
   playbackTimeoutId.value = setTimeout(playNextFrame, delay) as unknown as number
 }
