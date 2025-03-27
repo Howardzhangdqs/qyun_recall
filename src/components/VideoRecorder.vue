@@ -4,7 +4,10 @@
     <div class="video-container">
       <video ref="liveVideo" class="video-element" autoplay muted playsinline v-show="recording"></video>
       <canvas ref="videoCanvas" class="video-canvas" v-show="!recording"></canvas>
-      <div class="status-text">{{ statusText }}</div>
+      <div class="status-text">{{ statusText }} {{ playbackSpeed }}</div>
+    </div>
+    <div class="progress-bar-container" style="width: 100%; background-color: #333" @click="handleProgressClick"
+      @mousedown="startDrag" @mousemove="handleDrag" @mouseup="stopDrag" @mouseleave="stopDrag">
       <div class="progress-bar" v-show="progress > 0" :style="{ width: `${progress * 100}%` }"></div>
     </div>
 
@@ -47,6 +50,21 @@ const videoCanvas = ref<HTMLCanvasElement | null>(null)
 const videoStream = ref<MediaStream | null>(null)
 const canvasContext = ref<CanvasRenderingContext2D | null>(null)
 const progress = ref<number>(-1)
+const dragging = ref(false)
+
+const startDrag = () => {
+  dragging.value = true
+}
+
+const handleDrag = (event: MouseEvent) => {
+  if (dragging.value) {
+    handleProgressClick(event)
+  }
+}
+
+const stopDrag = () => {
+  dragging.value = false
+}
 
 // 切换播放速度
 const speeds = [0.1, 0.25, 0.5, 1, 2]
@@ -204,7 +222,24 @@ const togglePause = () => {
   }
 }
 
-// 调整播放速度
+// 调整播放进度
+const handleProgressClick = (event: MouseEvent) => {
+  console.log(event);
+  if (!playing.value || !videoCanvas.value) return;
+  const clickPosition = event.clientX / window.innerWidth;
+  console.log(clickPosition);
+  const targetIndex = Math.floor(clickPosition * playbackFrames.value.length)
+  currentPlaybackIndex.value = targetIndex
+  progress.value = currentPlaybackIndex.value / playbackFrames.value.length;
+
+  if (playing.value && !paused.value) {
+    if (playbackTimeoutId.value) {
+      clearTimeout(playbackTimeoutId.value)
+    }
+    playNextFrame()
+  }
+}
+
 const adjustSpeed = (speedFactor: number) => {
   playbackSpeed.value = speedFactor
   if (playing.value && !paused.value) {
@@ -278,11 +313,18 @@ h1 {
   text-shadow: 1px 1px 2px black;
 }
 
+.progress-bar-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 30px;
+}
+
 .progress-bar {
   position: absolute;
   bottom: 0;
   left: 0;
-  height: 2px;
+  height: 100%;
   background-color: white;
   transition: width 0.1s linear;
 }
