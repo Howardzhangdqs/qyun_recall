@@ -4,15 +4,19 @@
     <div class="video-container">
       <video ref="liveVideo" class="video-element" autoplay muted playsinline v-show="recording"></video>
       <canvas ref="videoCanvas" class="video-canvas" v-show="!recording"></canvas>
-      <div class="status-text">{{ statusText }} {{ playbackSpeed }}</div>
+      <div class="status-text">{{ statusText }}</div>
     </div>
     <div class="progress-bar-container" style="width: 100%; background-color: #333" @click="handleProgressClick"
-      @mousedown="startDrag" @mousemove="handleDrag" @mouseup="stopDrag" @mouseleave="stopDrag">
+      @mousedown="startDrag" @mousemove="handleDrag" @mouseup="stopDrag" @mouseleave="stopDrag" @touchstart="startDrag"
+      @touchmove="handleTouchMove" @touchend="stopDrag">
       <div class="progress-bar" v-show="progress > 0" :style="{ width: `${progress * 100}%` }"></div>
     </div>
 
     <!-- 控制按钮 -->
     <div class="controls">
+      <button @click="toggleFullScreen" class="control-btn">
+        {{ fullScreen ? '退出全屏' : '全屏' }}
+      </button>
       <button @click="toggleMode" class="control-btn">
         {{ recording ? '开始回放' : '继续录制' }}
       </button>
@@ -21,6 +25,9 @@
       </button>
       <button @click="cycleSpeed" class="control-btn" :disabled="recording || frameBuffer.length === 0">
         {{ playbackSpeed }}x
+      </button>
+      <button @click="toggleABPoints" class="control-btn" :disabled="recording || frameBuffer.length === 0">
+        AB点
       </button>
     </div>
   </div>
@@ -36,6 +43,9 @@ const recording = ref(true)
 const playing = ref(false)
 const paused = ref(false)
 const playbackSpeed = ref(0.25)
+const abPointA = ref<number | null>(null)
+const abPointB = ref<number | null>(null)
+const abPointMode = ref(false)
 const statusText = ref('Record')
 const frameBuffer = ref<ImageData[]>([])
 const bufferSize = ref(5 * FRAME_RATE)
@@ -52,6 +62,23 @@ const canvasContext = ref<CanvasRenderingContext2D | null>(null)
 const progress = ref<number>(-1)
 const dragging = ref(false)
 
+const fullScreen = ref(false)
+
+const toggleFullScreen = () => {
+  fullScreen.value = !fullScreen.value
+  if (fullScreen.value) {
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen()
+    } else if (document.body.requestFullscreen) {
+      document.body.requestFullscreen()
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen()
+    }
+  }
+}
+
 const startDrag = () => {
   dragging.value = true
 }
@@ -59,6 +86,23 @@ const startDrag = () => {
 const handleDrag = (event: MouseEvent) => {
   if (dragging.value) {
     handleProgressClick(event)
+  }
+}
+
+const handleTouchMove = (event: TouchEvent) => {
+  if (dragging.value) {
+    const touch = event.touches[0]
+    const clickPosition = touch.clientX / window.innerWidth
+    const targetIndex = Math.floor(clickPosition * playbackFrames.value.length)
+    currentPlaybackIndex.value = targetIndex
+    progress.value = currentPlaybackIndex.value / playbackFrames.value.length;
+
+    if (playing.value && !paused.value) {
+      if (playbackTimeoutId.value) {
+        clearTimeout(playbackTimeoutId.value)
+      }
+      playNextFrame()
+    }
   }
 }
 
@@ -153,7 +197,7 @@ const startCapturingFrames = () => {
         }
       }
 
-      statusText.value = 'Recording'
+      statusText.value = '录制中'
     }
 
     animationFrameId.value = requestAnimationFrame(captureFrame)
@@ -189,14 +233,44 @@ const startPlayback = () => {
   playbackFrames.value = [...frameBuffer.value]
   currentPlaybackIndex.value = 0
   playNextFrame()
-  statusText.value = 'Recalling'
+  statusText.value = '回放中'
 }
 
 // 播放下一帧
+const toggleABPoints = () => {
+  if (!abPointA.value) {
+    abPointA.value = currentPlaybackIndex.value
+    statusText.value = '设置A点'
+  } else if (!abPointB.value) {
+
+    // 如果 A 点在 B 点后面，则将B点设置为视频的最后一帧
+    if (abPointA.value > currentPlaybackIndex.value) {
+      abPointB.value = playbackFrames.value.length - 1
+    } else {
+      abPointB.value = currentPlaybackIndex.value
+    }
+
+    abPointMode.value = true
+    statusText.value = 'AB循环中'
+  } else {
+    abPointA.value = null
+    abPointB.value = null
+    abPointMode.value = false
+    statusText.value = 'Recalling'
+  }
+}
+
 const playNextFrame = () => {
   if (!videoCanvas.value || !canvasContext.value || !playing.value || paused.value) return
 
-  if (currentPlaybackIndex.value >= playbackFrames.value.length) {
+  if (abPointMode.value && abPointA.value !== null && abPointB.value !== null) {
+    if (currentPlaybackIndex.value >= abPointB.value) {
+      currentPlaybackIndex.value = abPointA.value
+    }
+    if (currentPlaybackIndex.value < abPointA.value) {
+      currentPlaybackIndex.value = abPointA.value
+    }
+  } else if (currentPlaybackIndex.value >= playbackFrames.value.length) {
     // 循环播放
     currentPlaybackIndex.value = 0
   }
@@ -326,7 +400,7 @@ h1 {
   left: 0;
   height: 100%;
   background-color: white;
-  transition: width 0.1s linear;
+  transition: width v-bind("`${(playbackSpeed > 0.5 ? 0 : 0.1)}s`") linear;
 }
 
 .controls {
@@ -345,7 +419,7 @@ h1 {
   color: white;
   border: 1px solid white;
   border-radius: 4px;
-  transition: all 0.3s;
+  transition: all 0.1s;
 }
 
 .control-btn:hover {
